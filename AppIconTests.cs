@@ -8,7 +8,7 @@ namespace Kotoshiro;
 // resources Windows Explorer reads rather than just the managed Form.Icon property.
 internal static class AppIconTests
 {
-    private const string IconHash = "2DB9B28FB7BD44A73DEB8FBC7395AB63961B9EB8528DC0103D7B035A88D9486E";
+    private const string IconHash = "B3BE6538FDEAAF3F32A521E17B7831AE21230B4FA30C78390D6B8C85095480CD";
     private const string DarkImageHash = "31A8FED304F9464FA314E1C7C0DA7A539AB830E9A52BD4D682E4467BE064CE6F";
     private const string LightImageHash = "E4E76682CAFA12509397801D08C0E3347558828E72A60E16933B1C95A9FE5902";
     private const string BlackMarkHash = "7C1346ABA1ABAE36C7DB26D07CD9ABC4E1ABDBE8775B795A55CE49661B747699";
@@ -19,9 +19,9 @@ internal static class AppIconTests
     internal static List<string> Run()
     {
         byte[] source = Resource("Assets.AppIcon.ico");
-        Check(Hash(source) == IconHash, "embedded ICO preserves the user's original bytes");
+        Check(Hash(source) == IconHash, "embedded ICO matches the white application icon exported from the supplied vector artwork");
         var frames = ParseFrames(source);
-        Check(frames.Select(frame => frame.Width).SequenceEqual(RequiredSizes), "ICO contains the supplied 16/24/32/48/64/128/256 pixel frames");
+        Check(frames.Select(frame => frame.Width).SequenceEqual(RequiredSizes), "ICO contains the required 16/24/32/48/64/128/256 pixel frames");
         foreach (var frame in frames)
         {
             Check(frame.Width == frame.Height && frame.Depth == 32, "each ICO frame is square and 32-bit");
@@ -32,7 +32,7 @@ internal static class AppIconTests
         }
         var results = new List<string>
         {
-            "PASS: embedded Windows ICO is byte-identical to the supplied icon, with all seven 32-bit PNG resolutions (16 through 256 pixels)"
+            "PASS: embedded Windows ICO matches the white application icon, with all seven 32-bit PNG resolutions (16 through 256 pixels)"
         };
         foreach (var asset in new[] { ("Assets.AppIcon.png", DarkImageHash), ("Assets.AppIcon.Light.png", LightImageHash) })
         {
@@ -139,10 +139,10 @@ internal static class AppIconTests
             for (int i = 0; i < first.Count; i++)
             {
                 Check(first[i].Width == sourceFrames[i].Width && first[i].Height == sourceFrames[i].Height && first[i].Depth == sourceFrames[i].Depth,
-                    "native executable icon frame dimensions and depth match the supplied ICO");
-                Check(first[i].Bytes.AsSpan().SequenceEqual(sourceFrames[i].Bytes), "native executable icon frame is byte-identical to the supplied ICO PNG");
+                    "native executable icon frame dimensions and depth match the white application ICO");
+                Check(first[i].Bytes.AsSpan().SequenceEqual(sourceFrames[i].Bytes), "native executable icon frame is byte-identical to the white application ICO PNG");
             }
-            return [$"PASS: published EXE's first RT_GROUP_ICON and all {first.Count} RT_ICON frames are byte-identical to the user's ICO; Windows Explorer reads this native resource"];
+            return [$"PASS: published EXE's first RT_GROUP_ICON and all {first.Count} RT_ICON frames are byte-identical to the white application ICO; Windows Explorer reads this native resource"];
         }
         finally { FreeLibrary(module); }
     }
@@ -168,9 +168,9 @@ internal static class AppIconTests
             Check(actual.Size == expected.Size, "native window icon has the expected size");
             for (int x = 0; x < actual.Width; x++)
                 for (int y = 0; y < actual.Height; y++)
-                    Check(actual.GetPixel(x, y).ToArgb() == expected.GetPixel(x, y).ToArgb(), "native window icon pixels match the user's artwork");
+                    Check(actual.GetPixel(x, y).ToArgb() == expected.GetPixel(x, y).ToArgb(), "native window icon pixels match the white application icon");
         }
-        return $"PASS: {form.GetType().Name} WM_GETICON returns both large and small native icons whose rendered pixels match the user's ICO";
+        return $"PASS: {form.GetType().Name} WM_GETICON returns both large and small native icons whose rendered pixels match the white application ICO";
     }
 
     private static byte[] Resource(string suffix)
