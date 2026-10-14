@@ -34,6 +34,8 @@
 
 ## 从源码构建
 
+双击仓库根目录的 `编译运行版.bat`，会在 BAT 所在文件夹生成 `运行版` 文件夹和 `Kotoshiro-版本号-Windows-x64.zip`，例如 `Kotoshiro-0.9.10-Windows-x64.zip`。ZIP 名称自动读取 `Kotoshiro.csproj` 中的 `Version`，修改版本号后，下次打包会使用新名称。两者包含主程序、识别引擎、播放器、白色图标和许可说明；解压 ZIP 后运行其中的 `Kotoshiro.exe`。再次执行会更新运行版文件夹和同版本的 ZIP，之前其他版本的压缩包会保留。编译或打包失败时窗口会显示原因，并保留之前的输出。
+
 需要 Windows、.NET 8 SDK 和网络连接。在仓库根目录打开 PowerShell：
 
 ```powershell

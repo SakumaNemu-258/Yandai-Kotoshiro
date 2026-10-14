@@ -5,6 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <DefaultItemExcludes>$(DefaultItemExcludes);运行版/**;运行版.zip;Kotoshiro-*-Windows-x64.zip;.kotoshiro-build-*/**;.kotoshiro-backup-*/**</DefaultItemExcludes>
     <AssemblyName>Kotoshiro</AssemblyName>
     <RootNamespace>Kotoshiro</RootNamespace>
     <Title>言代Kotoshiro</Title>

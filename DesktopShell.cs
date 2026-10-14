@@ -133,14 +133,15 @@ public sealed class DesktopShell : IDisposable, IMessageFilter
                 if (shell.header.HasBranding)
                 {
                     Rectangle icon = shell.BrandingIconBounds;
-                    Rectangle title = shell.HeaderBoundsToForm(shell.header.TitleTextBounds);
+                    Rectangle prefix = shell.HeaderBoundsToForm(shell.header.TitlePrefixBounds);
+                    Rectangle suffix = shell.HeaderBoundsToForm(shell.header.TitleSuffixBounds);
                     Point buttons = form.PointToClient(shell.header.PointToScreen(new Point(shell.header.ButtonsLeft, 0)));
                     int expectedSize = Math.Max(1, (int)Math.Round(20f * shell.header.DeviceDpi / 96f));
                     int expectedGap = Math.Max(1, (int)Math.Round(6f * shell.header.DeviceDpi / 96f));
                     Check(!icon.IsEmpty && icon.Width == expectedSize && icon.Height == expectedSize,
                         "Main title branding icon is missing or does not follow DPI.");
-                    Check(icon.Left == title.Right + expectedGap && icon.Right < buttons.X,
-                        "Branding icon does not follow the title or overlaps window buttons.");
+                    Check(icon.Left == prefix.Right + expectedGap && suffix.Left == icon.Right + expectedGap && suffix.Right < buttons.X,
+                        "Branding icon is not between the Chinese and English names or overlaps window buttons.");
                     Check(new Rectangle(Point.Empty, capture.Size).Contains(icon), "Branding icon is outside the captured window.");
                     RectangleF glyphBounds = shell.BrandingGlyphDrawBounds;
                     Rectangle source = Branding.HeaderIconSourceBounds;
@@ -174,6 +175,33 @@ public sealed class DesktopShell : IDisposable, IMessageFilter
                 else Check(shell.BrandingIconBounds.IsEmpty && shell.BrandingGlyphDrawBounds.IsEmpty, "Non-brand title contains an unexpected branding icon.");
                 if (capturePath is not null) capture.Save(capturePath);
             }
+            // Exercise the same title renderer with a suffix and a long title.
+            // The mark stays anchored to the Chinese name even when the English
+            // name and window description need end ellipsis.
+            string originalTitle = shell.header.Title;
+            try
+            {
+                Rectangle originalIcon = shell.header.BrandingIconBounds;
+                if (shell.header.HasBranding)
+                {
+                    shell.header.Title = Branding.DisplayName + " · 日语直播中文字幕";
+                    shell.header.Refresh();
+                    Check(shell.header.BrandingIconBounds == originalIcon, "A window description moved the mark after the English name.");
+                    Check(shell.header.TitleSuffixBounds.Left > shell.header.BrandingIconBounds.Right && shell.header.TitleSuffixBounds.Right < shell.header.ButtonsLeft,
+                        "English title suffix overlaps the mark or window buttons.");
+                    shell.header.Title = Branding.DisplayName + " · " + new string('译', 400);
+                    shell.header.Refresh();
+                    Check(shell.header.BrandingIconBounds == originalIcon && shell.header.TitleSuffixBounds.Right < shell.header.ButtonsLeft,
+                        "A truncated title moved the mark or covered window buttons.");
+                }
+                foreach (string unbrandedTitle in new[] { "设置", "Kotoshiro 构建工具" })
+                {
+                    shell.header.Title = unbrandedTitle; shell.header.Refresh();
+                    Check(shell.header.BrandingIconBounds.IsEmpty && shell.header.BrandingGlyphDrawBounds.IsEmpty && shell.header.TitleSuffixBounds.IsEmpty,
+                        "An unbranded title contains a mark or a split brand name.");
+                }
+            }
+            finally { shell.header.Title = originalTitle; shell.header.Refresh(); }
             Check(shell.Content.Top >= shell.Header.Bottom && shell.Content.Bottom <= form.ClientSize.Height,
                 "Window content overlaps its title bar or frame.");
             if (shell.resizable)
@@ -200,7 +228,7 @@ public sealed class DesktopShell : IDisposable, IMessageFilter
                 SetState(FormWindowState.Minimized); Check(form.WindowState == FormWindowState.Minimized, "Minimize failed.");
                 SetState(FormWindowState.Normal); Check(form.Bounds == oldBounds, "Minimize restore changed window bounds.");
             }
-            return "PASS: whole-window PrintWindow capture and native geometry contain no extra caption; transparent header mark follows title, preserves aspect ratio and avoids buttons; custom title bar; eight native resize edges; maximize uses monitor working area; minimize and maximize restore bounds.\n";
+            return "PASS: whole-window PrintWindow capture and native geometry contain no extra caption; transparent header mark sits between Chinese and English names, preserves aspect ratio and avoids buttons; added descriptions and truncated titles retain the mark position; unbranded titles have no mark; custom title bar; eight native resize edges; maximize uses monitor working area; minimize and maximize restore bounds.\n";
         }
         finally
         {
@@ -346,10 +374,13 @@ public sealed class DesktopShell : IDisposable, IMessageFilter
         private readonly WindowButton maximize;
         private string title;
         public string Title { get => title; set { title = value; Invalidate(); } }
-        internal bool HasBranding => title.Contains("Kotoshiro", StringComparison.OrdinalIgnoreCase);
+        private int BrandingNameIndex => title.IndexOf(Branding.DisplayName, StringComparison.OrdinalIgnoreCase);
+        internal bool HasBranding => BrandingNameIndex >= 0;
         internal Rectangle BrandingIconBounds { get; private set; }
         internal RectangleF BrandingGlyphDrawBounds { get; private set; }
         internal Rectangle TitleTextBounds { get; private set; }
+        internal Rectangle TitlePrefixBounds { get; private set; }
+        internal Rectangle TitleSuffixBounds { get; private set; }
         internal int ButtonsLeft => Controls.Cast<Control>().Where(x => x.Visible).Select(x => x.Left).DefaultIfEmpty(Width).Min();
         public ShellHeader(Form form, string title)
         {
@@ -375,15 +406,30 @@ public sealed class DesktopShell : IDisposable, IMessageFilter
             int available = Math.Max(0, ButtonsLeft - padding * 2);
             int iconSize = Math.Max(1, (int)Math.Round(20f * DeviceDpi / 96f));
             int gap = Math.Max(1, (int)Math.Round(6f * DeviceDpi / 96f));
-            bool showBranding = HasBranding && available > iconSize + gap;
-            int textLimit = Math.Max(0, available - (showBranding ? iconSize + gap : 0));
             var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
-            int naturalWidth = TextRenderer.MeasureText(e.Graphics, title, Font, new Size(int.MaxValue, Height), flags).Width;
-            TitleTextBounds = new Rectangle(padding, 0, Math.Min(naturalWidth, textLimit), Math.Max(0, Height - 1));
-            TextRenderer.DrawText(e.Graphics, title, Font, TitleTextBounds, Theme.Muted, flags);
-            BrandingIconBounds = showBranding
-                ? new Rectangle(TitleTextBounds.Right + gap, (Height - iconSize) / 2, iconSize, iconSize)
-                : Rectangle.Empty;
+            int Measure(string text) => TextRenderer.MeasureText(e.Graphics, text, Font, new Size(int.MaxValue, Height), flags).Width;
+            int splitIndex = HasBranding ? BrandingNameIndex + "言代".Length : -1;
+            string prefix = splitIndex >= 0 ? title[..splitIndex] : title;
+            string suffix = splitIndex >= 0 ? title[splitIndex..] : "";
+            int prefixWidth = Measure(prefix);
+            bool showBranding = HasBranding && available >= prefixWidth + iconSize + gap * 2 + Measure("…");
+            TitleSuffixBounds = Rectangle.Empty;
+            BrandingIconBounds = Rectangle.Empty;
+            if (showBranding)
+            {
+                TitlePrefixBounds = new Rectangle(padding, 0, prefixWidth, Math.Max(0, Height - 1));
+                BrandingIconBounds = new Rectangle(TitlePrefixBounds.Right + gap, (Height - iconSize) / 2, iconSize, iconSize);
+                int suffixLeft = BrandingIconBounds.Right + gap;
+                TitleSuffixBounds = new Rectangle(suffixLeft, 0, Math.Min(Measure(suffix), Math.Max(0, padding + available - suffixLeft)), Math.Max(0, Height - 1));
+                TitleTextBounds = Rectangle.Union(TitlePrefixBounds, TitleSuffixBounds);
+                TextRenderer.DrawText(e.Graphics, prefix, Font, TitlePrefixBounds, Theme.Muted, flags);
+                TextRenderer.DrawText(e.Graphics, suffix, Font, TitleSuffixBounds, Theme.Muted, flags);
+            }
+            else
+            {
+                TitlePrefixBounds = TitleTextBounds = new Rectangle(padding, 0, Math.Min(Measure(title), available), Math.Max(0, Height - 1));
+                TextRenderer.DrawText(e.Graphics, title, Font, TitleTextBounds, Theme.Muted, flags);
+            }
             BrandingGlyphDrawBounds = RectangleF.Empty;
             if (!BrandingIconBounds.IsEmpty)
             {

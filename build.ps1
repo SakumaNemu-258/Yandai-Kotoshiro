@@ -1,4 +1,4 @@
-param([string]$Destination = (Join-Path $PSScriptRoot 'artifacts'))
+﻿param([string]$Destination = (Join-Path $PSScriptRoot 'artifacts'))
 $ErrorActionPreference = 'Stop'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 dotnet publish (Join-Path $PSScriptRoot 'Kotoshiro.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o $Destination

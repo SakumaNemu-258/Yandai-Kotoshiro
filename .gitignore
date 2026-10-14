@@ -3,6 +3,11 @@ bin/
 obj/
 artifacts/
 engine-cache/
+运行版/
+运行版.zip
+Kotoshiro-*-Windows-x64.zip
+.kotoshiro-build-*/
+.kotoshiro-backup-*/
 engine/
 player/
 .vs/
