@@ -17,7 +17,6 @@ Get-ChildItem -LiteralPath (Join-Path $engineCache 'Release') -Filter '*.dll' | 
 Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'LICENSE-*.txt' | Copy-Item -Destination $Destination
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '使用说明.txt') -Destination $Destination
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '播放器组件来源.txt') -Destination $Destination
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot '界面设计参考.txt') -Destination $Destination
 # Use the same checksum-pinned player binaries as the tested release.
 $playerOutput = Join-Path $Destination 'player'
 New-Item -ItemType Directory -Force -Path $playerOutput | Out-Null
