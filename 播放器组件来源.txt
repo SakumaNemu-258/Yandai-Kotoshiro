@@ -1,0 +1,41 @@
+言代Kotoshiro 播放器与B站组件来源（沿用 0.9.4 的固定组件）
+
+构建方：shinchiro/mpv-winbuild-cmake
+固定发布版本：https://github.com/shinchiro/mpv-winbuild-cmake/releases/tag/20261013
+构建源码：https://github.com/shinchiro/mpv-winbuild-cmake/tree/20261013
+构建源码归档随源码包提供 build-sources.tar.gz。
+
+mpv Windows x64（普通 x86_64 构建，非 x86_64-v3 专用构建）
+二进制归档：https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261013/mpv-x86_64-20261013-git-9d144e57b6.7z
+发布的 SHA-256：551c3ec2e18db657d4f13775902145a72fb1900478719b9004ec446465fd93b9
+已下载并核对上述散列。
+版本：mpv v0.41.0-1151-g9d144e57b
+对应源码：https://github.com/mpv-player/mpv/tree/9d144e57b6
+许可证与版权清单：LICENSE-mpv.txt。使用独立进程，不链接到言代Kotoshiro主程序。
+
+FFmpeg Windows x64
+二进制归档：https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261013/ffmpeg-x86_64-git-0eeb79fcc.7z
+发布的 SHA-256：3e6409f6257af66f2df88aa0e0ff4dc093ae42e034cb3b5d2d1b32f2d9bc2d8b
+已下载并核对上述散列。
+版本：FFmpeg N-127491-g0eeb79fcc，包含 GPL / version3 配置。
+对应源码：https://github.com/FFmpeg/FFmpeg/tree/0eeb79fcc
+许可证：LICENSE-ffmpeg.txt。使用独立进程，不链接到言代Kotoshiro主程序。
+
+原构建项目描述了编译流程、依赖来源及构建选项。各依赖的权利保留给相应作者。
+mpv 文档：https://mpv.io/manual/stable/
+FFmpeg 文档：https://ffmpeg.org/ffmpeg-formats.html
+B站接入参考：https://github.com/streamlink/streamlink/blob/master/src/streamlink/plugins/bilibili.py
+本软件不包含 Streamlink 程序；B站房间与直播源由独立实现的客户端请求。
+
+B站扫码登录使用官方网页接口，参考官方登录页及其前端源码：
+https://passport.bilibili.com/login
+https://s1.hdslb.com/bfs/static/2233-monorepo/passport/static/js/async/869.17276e03.js
+二维码由本机 QRCoder 1.7.0 生成，MIT 许可证随包提供 LICENSE-QRCoder.txt。
+https://github.com/Shane32/QRCoder/tree/2dc55ee03cb9abf66ffed7d683cbcce0a141b124
+
+弹幕接收/发送通过独立实现的客户端直接请求B站网站接口。
+协议与参数参考实现：
+https://github.com/xfgryujk/blivedm/blob/master/blivedm/clients/web.py
+https://github.com/xfgryujk/blivedm/blob/master/blivedm/clients/ws_base.py
+https://github.com/simon300000/bilibili-live-danmaku-api/blob/master/index.js
+本软件不分发上述项目的程序代码。

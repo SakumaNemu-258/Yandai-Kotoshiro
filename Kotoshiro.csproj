@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Kotoshiro</AssemblyName>
+    <RootNamespace>Kotoshiro</RootNamespace>
+    <Title>言代Kotoshiro</Title>
+    <AssemblyTitle>言代Kotoshiro</AssemblyTitle>
+    <Product>言代Kotoshiro</Product>
+    <Company>言代Kotoshiro</Company>
+    <Description>言代Kotoshiro · 日语直播中文字幕</Description>
+    <Version>0.9.10</Version>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\AppIcon.ico" LogicalName="Kotoshiro.Assets.AppIcon.ico" />
+    <EmbeddedResource Include="Assets\AppIcon.png" LogicalName="Kotoshiro.Assets.AppIcon.png" />
+    <EmbeddedResource Include="Assets\AppIcon.Light.png" LogicalName="Kotoshiro.Assets.AppIcon.Light.png" />
+    <EmbeddedResource Include="Assets\HeaderMark.Black.png" LogicalName="Kotoshiro.Assets.HeaderMark.Black.png" />
+    <EmbeddedResource Include="Assets\HeaderMark.White.png" LogicalName="Kotoshiro.Assets.HeaderMark.White.png" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="QRCoder" Version="1.7.0" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,38 @@
+# Build output and downloaded runtime dependencies
+bin/
+obj/
+artifacts/
+engine-cache/
+engine/
+player/
+.vs/
+.idea/
+*.user
+*.suo
+*.pdb
+*.log
+
+# Local settings, credentials, models, and playback cache
+settings.json
+settings.json.tmp
+settings.*.json
+*.dat
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+*.gguf
+ggml-*.bin
+models/
+.kotoshiro/
+.tingyi/
+player-cache/
+*.part
+
+# Local test and preview output
+self-test-output/
+preview-output/
+test-error.txt
+preview-error.txt

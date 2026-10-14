@@ -1,0 +1,86 @@
+PASS: embedded Windows ICO is byte-identical to the supplied icon, with all seven 32-bit PNG resolutions (16 through 256 pixels)
+PASS: both embedded full icon PNG variants preserve the user's source SHA256, 1024 pixel resolution, and transparent corners
+PASS: transparent black and white header marks are byte-identical to the supplied sources; over 80% of pixels are fully transparent, with no background tile
+PASS: both header marks share identical alpha geometry, match the original icon's opaque strokes, use only black/white foreground colors, and retain their 632x568 artwork bounds
+PASS: published EXE's first RT_GROUP_ICON and all 7 RT_ICON frames are byte-identical to the user's ICO; Windows Explorer reads this native resource
+PASS: translation context defaults to 3 for fresh and legacy settings; effective value clamps to 0..30
+PASS: user-selected context values 0, 6 and 30 survive independent clone and isolated settings save/load; legacy file loads 3 without modifying real user settings
+PASS: chat translation payload preserves exactly the newest 0 successful source/translation pairs, in order, plus the current source
+PASS: chat translation payload preserves exactly the newest 1 successful source/translation pairs, in order, plus the current source
+PASS: chat translation payload preserves exactly the newest 3 successful source/translation pairs, in order, plus the current source
+PASS: chat translation payload preserves exactly the newest 6 successful source/translation pairs, in order, plus the current source
+PASS: chat translation payload preserves exactly the newest 30 successful source/translation pairs, in order, plus the current source
+PASS: chat context excludes empty responses, failed HTTP requests and remember=false probes; probes still use prior context; a new translator starts empty
+PASS: responses translation payload preserves exactly the newest 0 successful source/translation pairs, in order, plus the current source
+PASS: responses translation payload preserves exactly the newest 1 successful source/translation pairs, in order, plus the current source
+PASS: responses translation payload preserves exactly the newest 3 successful source/translation pairs, in order, plus the current source
+PASS: responses translation payload preserves exactly the newest 6 successful source/translation pairs, in order, plus the current source
+PASS: responses translation payload preserves exactly the newest 30 successful source/translation pairs, in order, plus the current source
+PASS: responses context excludes empty responses, failed HTTP requests and remember=false probes; probes still use prior context; a new translator starts empty
+PASS: messages translation payload preserves exactly the newest 0 successful source/translation pairs, in order, plus the current source
+PASS: messages translation payload preserves exactly the newest 1 successful source/translation pairs, in order, plus the current source
+PASS: messages translation payload preserves exactly the newest 3 successful source/translation pairs, in order, plus the current source
+PASS: messages translation payload preserves exactly the newest 6 successful source/translation pairs, in order, plus the current source
+PASS: messages translation payload preserves exactly the newest 30 successful source/translation pairs, in order, plus the current source
+PASS: messages context excludes empty responses, failed HTTP requests and remember=false probes; probes still use prior context; a new translator starts empty
+PASS: isolated ChatGPT subscription fixture sends the newest 6 successful pairs through streamed Responses with an OAuth bearer; no real login or inference request
+PASS: glossary TXT exports UTF-8 BOM with only text; Japanese/Chinese/non-BMP, spacing and notes roundtrip
+PASS: glossary TXT imports strict UTF-8, UTF-16 LE/BE BOM and GB18030, normalizing line breaks
+PASS: glossary TXT merge keeps user entries/order/notes, removes identical lines and retains conflicts for review
+PASS: default Japanese livestream glossary examples merge without replacement or duplicates
+PASS: exact five default terms, including hinome name; old built-in defaults upgrade while custom and empty glossaries remain unchanged
+PASS: oversized/binary/control/malformed TXT imports are rejected without changing source or prior glossary
+PASS: validated atomic glossary export preserves existing files on invalid input or locked destinations and cleans temporary files
+PASS: rebranding preserves legacy settings, chosen model folder, both encrypted API keys and local ChatGPT/Bilibili login files; no migration or network request
+PASS: existing GPU components/cache path is reused; fresh installations use the new runtime folder name without default model downloads
+PASS: new data root has deterministic priority and leaves legacy files intact; all compatibility checks use isolated fixtures
+PASS: available room quality list, requested quality, account header, server downgrade and FLV route preference
+PASS: Bilibili tracked URL/room parsing, invalid input rejection, short room ID resolution, simulated public source and v2 fallback, offline status
+PASS: safe HLS playlist, duration checks, playback clock cue selection, subtitle wait/resume and wait-disabled behavior
+PASS: live transport diagnostics retain categories only, signed URL and query parameters discarded
+PASS: independent network pause/resume hysteresis, recovery boundary, repeat underrun and EOF tail release
+PASS: subtitle boundary hold, two-second recovery, continued play within the margin and completed short tail release
+PASS: pending final translation survives input EOF, completed live tail and completed EOF tail both resume
+PASS: wait-disabled behavior and independent network/subtitle shortage causes
+PASS: startup delay resolves low-delay/recognition-segment conflict and retains the requested delay when adequate or waiting is disabled
+PASS: DeepSeek Flash/V4 Pro defaults and validated model-list endpoints
+PASS: model discovery uses metadata GET, preserves custom model/key, sorts and deduplicates IDs
+PASS: Anthropic model discovery auth/version and cursor pagination
+PASS: model discovery cancellation and credential-safe HTTP/malformed-response errors
+PASS: independent encrypted speech/translation credentials; API mode needs no local model/GPU/folder; local default preserved
+PASS: HTTPS speech endpoint joins correctly and rejects credentials/query/text-translation endpoints
+PASS: DeepSeek official text API is rejected for speech recognition before sending audio or credentials
+PASS: WAV multipart preserves audio, selected/custom model, Japanese language schema and speech-only Bearer auth; no translation call
+PASS: SiliconFlow multipart contains only file/model and independent speech credentials; no unsupported OpenAI parameters
+PASS: API HTTP/network failures use safe actionable messages without server bodies or secrets
+PASS: malformed/missing transcript is rejected safely, empty transcript is allowed, and unknown-length responses are bounded
+PASS: stop cancels pending speech recognition; header/body deadlines prevent stalled API requests
+PASS: Bilibili QR waiting/scanned/expired/success, server verified UID, local-only encrypted restore, invalid login clear, temporary failure retain, local logout
+PASS: missing or expired credentials, foreign cookie domain, mismatched UID, cookie injection, foreign QR URL and malformed JSON rejected without persistence
+PASS: logout wins concurrent account validation and invalidates old QR login attempts across store instances
+PASS: danmaku op 8 auth, op 5 plain/multiple/zlib/Brotli comments, heartbeat trailing data, malformed packet/header rejection, decompression limit and unicode sanitization
+PASS: website-issued WBI key permutation and sorted room query signing
+PASS: current official WSS port 2245 and legacy 443 accepted; unrelated hosts, credentials and other ports rejected
+PASS: fake transport only; send endpoint/own cookie/CSRF/form text, safe rejection/rate/length handling and code-0 failure message. No public message sent.
+PASS: simulated official OAuth through real loopback callback: state, PKCE, issued client ID, stable host, signed identity, encrypted storage, returning account, mismatched account, declined consent, identity-only scope, account-specific catalog, first-login welcome
+PASS: ID-token signature, audience, expiry and nonce rejection
+PASS: concurrent refresh serialized, granted scope retained, rotating replacement atomically persisted, earliest-refresh string supported
+PASS: terminal refresh clears credentials but retains registration; temporary server failure preserves login
+PASS: official Responses route, OAuth bearer, selected model, stream=true, store=false, supported fields, context, completed-only subtitles; partial quota/incomplete/error/disconnection rejected; no API fallback; safe structured HTTP errors
+PASS: discovered revocation endpoint called; selected account signed out locally; registration and other account retained
+PASS: network/5xx revocation retries bounded to three, then local credentials cleared with unconfirmed remote result
+PASS: encrypted key save/load
+PASS: white theme and API recognition settings persist without a model folder; speech and translation keys remain separate and encrypted
+PASS: explicit model folder, persistence, and GPU component location
+PASS: model migration copies/verifies before commit and removes only original known model
+PASS: cancelled or conflicting migration preserves original model
+PASS: GPU installer rejects invalid archive checksum
+PASS: DeepSeek request/auth/disabled thinking/response/context
+PASS: API failure doesn't expose server body or key
+PASS: OpenAI Responses, Gemini compatible, Claude Messages, custom request/auth/context/text parsing
+PASS: legacy configuration migration and separate encrypted provider credentials
+PASS: silence gate, pause segmentation, 16 kHz mono WAV
+PASS: continuous audio submits at 3s/6s according to selected segment limit
+PASS: bounded capture queue keeps fresh chunks
+INFO: 3 active Windows output device(s)
+PASS: real Windows loopback device opened and closed (audio content not evaluated)
