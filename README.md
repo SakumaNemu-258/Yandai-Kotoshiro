@@ -90,7 +90,7 @@ dotnet .\bin\Release\net8.0-windows\win-x64\Kotoshiro.dll --preview .\preview-ou
 
 ## Code signing policy
 
-本仓库正在准备接入 SignPath Foundation 的免费开源签名计划，尚未配置签名服务。当前本地编译默认生成未签名安装器，不能把提交开源许可证等同于已经取得签名。
+本项目于 2026-10-15 提交了 SignPath Foundation 免费开源签名申请，目前等待审核，尚未配置签名服务。当前本地编译默认生成未签名安装器，不能把申请提交等同于已经取得签名。GitHub 托管 Windows 构建已完成一次 [在线验证](https://github.com/SakumaNemu-258/Yandai-Kotoshiro/actions/runs/38739562584)。
 
 维护者、代码审查与签名审批负责人为 [SakumaNemu-258](https://github.com/SakumaNemu-258)。拟采用的构建来源、审批与签名范围见 [Code signing policy](SIGNING.md)，申请资料与接入步骤见 [SignPath 申请准备](docs/signpath-application.md)。免费资格需要 SignPath 审核；以其实际审核结果和下载文件的数字签名为准。
 

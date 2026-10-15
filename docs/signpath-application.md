@@ -4,7 +4,9 @@
 
 官方申请入口：https://signpath.org/apply
 
-本文件提供填写资料和接入顺序，申请尚未由本次工作提交。免费签名需要 SignPath 审核，公开源码和选择 GPL 并不保证获批。官方要求见 https://signpath.org/terms 。
+本文件保留填写资料、接入顺序和验证记录。申请已于 2026-10-15 提交，官方申请页面确认 `Form submitted` 和 `Thank you, we'll be in touch soon.`，当前等待审核。维护者已确认项目条款及个人数据处理同意，营销通讯选项未勾选；姓名和联系邮箱不写入公开仓库。
+
+免费签名需要 SignPath 审核，公开源码和选择 GPL 并不保证获批；本项目尚未启用签名。申请如实说明了项目仍处早期阶段，并附上第三方源码核查及尚待核实的依赖资料，不宣称已完成全部许可审核。官方要求见 https://signpath.org/terms 。
 
 ## 已准备的仓库内容
 
@@ -53,7 +55,15 @@ Reputation 是必填项：应如实说明项目阶段，并提供公开仓库、
 1. 把审阅后的源码、许可证、说明和工作流提交到 GitHub。工作流需先在默认分支中出现，才能在 Actions 中手动运行。
 2. 打开仓库的 Actions，选择 `Build Windows installer (unsigned)`，再选择要构建的分支并运行。
 3. 构建完成后，从该次运行的 Artifacts 下载产物；其中只有安装器和 `build-provenance.txt`。记录包含对应提交、工作流链接、SDK 版本和 SHA-256，不是密码学签名证明。
-4. 检查运行记录与产物，并提供给审核者。当前工作流尚未在 GitHub 实际运行；本地静态检查不代表在线构建已通过。
+4. 检查运行记录与产物，并提供给审核者。2026-10-15 已在 GitHub 托管 Windows 环境实际完成一次构建：[运行 38739562584](https://github.com/SakumaNemu-258/Yandai-Kotoshiro/actions/runs/38739562584)，源码提交为 `edc8aef8b96713e4991f0e24734f307134386bb5`；后续版本仍需各自检查构建结果。
+
+## 已完成的在线构建验证
+
+2026-10-15 的首次尝试发现可选 NSIS 目录硬编码 G 盘时，脚本先拼接路径再检查目录，导致没有 G 盘的托管运行器中止。提交 `4a7061a85f5c13b990ec0782c9c015ae5779fc19` 已调整为先检查目录存在，再探测该工具；固定下载版本、哈希、微软签名检查和旧安装器回滚保持原逻辑。PowerShell 7 与 Windows PowerShell 5.1 共 18 项隔离检查通过。
+
+随后提交 `edc8aef8b96713e4991f0e24734f307134386bb5` 在 GitHub `windows-2022` / .NET SDK 8.0.426 构建成功，生成 `Kotoshiro-0.9.10-Windows-x64-Setup.exe` 并上传构建记录。构建产物入口：[Kotoshiro-0.9.10-Windows-x64-unsigned](https://github.com/SakumaNemu-258/Yandai-Kotoshiro/actions/runs/38739562584/artifacts/11975126665)。产物由 GitHub Actions 自动封装供下载，内部为安装器与构建记录，不改变本地 BAT 只输出安装器的行为。
+
+这验证了源码发布、依赖下载校验、NSIS 打包和产物上传路径，不代表安装器已取得数字签名，也不代替其他电脑上的安装测试或真实 API / 账号测试。该构建没有创建或更新 GitHub Release。
 
 工作流支持手动触发；main 分支的该工作流、`Build-Installer.ps1`、`Update-Runtime.ps1` 或 `build.ps1` 有改动时，也会自动运行构建校验。它使用只读仓库权限和固定提交版本的官方 Actions，不读取签名密钥。GitHub 中的构建产物保留 14 天；它不是永久发布的下载地址。公开仓库使用 GitHub 标准托管运行器的计费规则以 GitHub 当时规定为准。
 
