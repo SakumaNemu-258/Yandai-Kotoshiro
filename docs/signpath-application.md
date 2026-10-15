@@ -11,7 +11,7 @@
 - 主项目采用 `GPL-3.0-only`：根目录 `LICENSE` 为 GNU 发布的 GPL 第 3 版原文；许可范围、版权及第三方例外见 `NOTICE.md`。
 - 隐私说明：`PRIVACY.md`，列出音频、译文、上下文、术语表、账号、下载、缓存和本地存储范围。
 - 公开签名政策：README 的 `Code signing policy` 入口和 `SIGNING.md`，当前明确标注尚未接入签名。
-- GitHub Actions 手动构建入口：`.github/workflows/windows-build.yml`。仅在 GitHub 托管 Windows 运行器上构建未签名安装器和构建记录，不创建 Release，不请求签名。
+- GitHub Actions 构建入口：`.github/workflows/windows-build.yml`。支持手动触发，并在 main 分支的该工作流或三个构建脚本修改后自动校验；在 GitHub 托管 Windows 运行器上构建未签名安装器和构建记录，不创建 Release，不请求签名。
 - 本地编译仍沿用 `编译运行版.bat`，仅生成安装器；主项目许可证、版权和隐私说明会一同打包。
 
 主项目的 GPL 许可证、隐私说明、签名政策和工作流已随提交 `6faff70dc42f04d5a4b3d37478feef31bde8ecd4` 公开到仓库。后续申请链接应使用实际已推送的内容；个人申请姓名和邮箱不应写入公开仓库。
@@ -55,7 +55,7 @@ Reputation 是必填项：应如实说明项目阶段，并提供公开仓库、
 3. 构建完成后，从该次运行的 Artifacts 下载产物；其中只有安装器和 `build-provenance.txt`。记录包含对应提交、工作流链接、SDK 版本和 SHA-256，不是密码学签名证明。
 4. 检查运行记录与产物，并提供给审核者。当前工作流尚未在 GitHub 实际运行；本地静态检查不代表在线构建已通过。
 
-工作流只接受手动触发，使用只读仓库权限和固定提交版本的官方 Actions，不读取签名密钥。GitHub 中的构建产物保留 14 天；它不是永久发布的下载地址。公开仓库使用 GitHub 标准托管运行器的计费规则以 GitHub 当时规定为准。
+工作流支持手动触发；main 分支的该工作流、`Build-Installer.ps1`、`Update-Runtime.ps1` 或 `build.ps1` 有改动时，也会自动运行构建校验。它使用只读仓库权限和固定提交版本的官方 Actions，不读取签名密钥。GitHub 中的构建产物保留 14 天；它不是永久发布的下载地址。公开仓库使用 GitHub 标准托管运行器的计费规则以 GitHub 当时规定为准。
 
 ## 申请与正式发布前仍需核对
 
