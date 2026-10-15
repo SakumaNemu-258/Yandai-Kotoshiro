@@ -237,8 +237,8 @@ function Resolve-Compiler([string]$RequestedPath) {
             (Join-Path $repo 'engine-cache\nsis')
         )
         foreach ($toolRoot in $toolRoots) {
-            $candidates += (Join-Path $toolRoot 'makensis.exe')
-            if (Test-Path -LiteralPath $toolRoot -PathType Container) {
+            if (Test-Path -LiteralPath $toolRoot -PathType Container -ErrorAction SilentlyContinue) {
+                $candidates += (Join-Path $toolRoot 'makensis.exe')
                 foreach ($directory in @(Get-ChildItem -LiteralPath $toolRoot -Directory -Force | Sort-Object Name)) {
                     if (-not ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
                         $candidates += (Join-Path $directory.FullName 'makensis.exe')
