@@ -5,7 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <DefaultItemExcludes>$(DefaultItemExcludes);运行版/**;运行版.zip;Kotoshiro-*-Windows-x64.zip;.kotoshiro-build-*/**;.kotoshiro-backup-*/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);运行版/**;运行版.zip;Kotoshiro-*-Windows-x64.zip;Kotoshiro-*-Windows-x64-Setup.exe;.kotoshiro-build-*/**;.kotoshiro-backup-*/**;.kotoshiro-installer-*/**</DefaultItemExcludes>
     <AssemblyName>Kotoshiro</AssemblyName>
     <RootNamespace>Kotoshiro</RootNamespace>
     <Title>言代Kotoshiro</Title>
@@ -14,10 +14,15 @@
     <Company>言代Kotoshiro</Company>
     <Description>言代Kotoshiro · 日语直播中文字幕</Description>
     <Version>0.9.10</Version>
+    <Copyright>Copyright (C) 2026 SakumaNemu-258 and contributors</Copyright>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/SakumaNemu-258/Yandai-Kotoshiro</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
+    <None Update="LICENSE;NOTICE.md;PRIVACY.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <EmbeddedResource Include="Assets\AppIcon.ico" LogicalName="Kotoshiro.Assets.AppIcon.ico" />
     <EmbeddedResource Include="Assets\AppIcon.png" LogicalName="Kotoshiro.Assets.AppIcon.png" />
     <EmbeddedResource Include="Assets\AppIcon.Light.png" LogicalName="Kotoshiro.Assets.AppIcon.Light.png" />

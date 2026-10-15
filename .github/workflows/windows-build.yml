@@ -1,0 +1,110 @@
+name: Build Windows installer (unsigned)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    name: Windows x64 installer
+    # SignPath OSS origin verification requires GitHub-hosted runners.
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET 8 SDK
+        id: dotnet
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+          architecture: x64
+
+      - name: Select installed SDK for this build
+        env:
+          KOTOSHIRO_SDK_VERSION: ${{ steps.dotnet.outputs.dotnet-version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # This file exists only on the disposable runner. Avoid the runner's
+          # newer preinstalled SDK taking precedence over the selected .NET 8 SDK.
+          if (Test-Path -LiteralPath 'global.json') {
+            throw 'A committed global.json now exists; update this SDK selection step before building.'
+          }
+          if ($env:KOTOSHIRO_SDK_VERSION -notmatch '^8\.0\.[0-9]+$') {
+            throw 'The .NET setup action did not return a stable .NET 8 SDK version.'
+          }
+          @{ sdk = @{ version = $env:KOTOSHIRO_SDK_VERSION; rollForward = 'disable' } } |
+            ConvertTo-Json -Depth 3 | Set-Content -LiteralPath 'global.json' -Encoding utf8
+          dotnet --info
+          if ($LASTEXITCODE -ne 0) { throw '.NET SDK verification failed.' }
+
+      - name: Build unsigned installer
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # The existing script writes its installer to the repository root and
+          # cleans its temporary payload. It rejects repository subdirectories.
+          & .\Update-Runtime.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
+
+      - name: Verify output and record build details
+        id: output
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml]$project = Get-Content -LiteralPath 'Kotoshiro.csproj' -Raw -Encoding utf8
+          $versionNodes = @($project.SelectNodes('/Project/PropertyGroup/Version'))
+          if ($versionNodes.Count -ne 1) { throw 'Expected one project version.' }
+          $version = $versionNodes[0].InnerText.Trim()
+          if ($version -notmatch '\A[0-9]+(?:\.[0-9]+){1,3}(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?\z') {
+            throw 'Invalid project version.'
+          }
+          $installerName = 'Kotoshiro-' + $version + '-Windows-x64-Setup.exe'
+          if (-not (Test-Path -LiteralPath $installerName -PathType Leaf)) {
+            throw 'The expected installer was not generated.'
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $installerName
+          $hash = (Get-FileHash -LiteralPath $installerName -Algorithm SHA256).Hash
+          $sdk = dotnet --version
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to record the .NET SDK version.' }
+          $details = @(
+            'Kotoshiro Windows x64 build details',
+            'This workflow does not perform code signing or publish a GitHub release.',
+            ('Repository: ' + $env:GITHUB_SERVER_URL + '/' + $env:GITHUB_REPOSITORY),
+            ('Source commit: ' + $env:GITHUB_SHA),
+            ('Source ref: ' + $env:GITHUB_REF),
+            ('Workflow run: ' + $env:GITHUB_SERVER_URL + '/' + $env:GITHUB_REPOSITORY + '/actions/runs/' + $env:GITHUB_RUN_ID),
+            ('Run attempt: ' + $env:GITHUB_RUN_ATTEMPT),
+            ('Runner: ' + $env:RUNNER_OS + ' / ' + $env:RUNNER_ARCH),
+            ('.NET SDK: ' + $sdk),
+            ('Version: ' + $version),
+            ('Installer: ' + $installerName),
+            ('Authenticode status: ' + $signature.Status),
+            ('SHA256: ' + $hash),
+            'This text records build details; it is not a cryptographically signed provenance attestation.'
+          )
+          $details | Set-Content -LiteralPath 'build-provenance.txt' -Encoding utf8
+          ('installer=' + $installerName) >> $env:GITHUB_OUTPUT
+          ('artifact-name=Kotoshiro-' + $version + '-Windows-x64-unsigned') >> $env:GITHUB_OUTPUT
+
+      - name: Store unsigned installer and build details
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.output.outputs.artifact-name }}
+          path: |
+            ${{ steps.output.outputs.installer }}
+            build-provenance.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

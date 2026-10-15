@@ -6,15 +6,33 @@ if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 $engineCache = Join-Path $PSScriptRoot 'engine-cache'
 New-Item -ItemType Directory -Force -Path $engineCache | Out-Null
 $archive = Join-Path $engineCache 'whisper-v1.8.2.zip'
-& curl.exe -L --fail --retry 2 -o $archive 'https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.2/whisper-bin-x64.zip'
-if ($LASTEXITCODE -ne 0) { throw 'Engine download failed' }
-if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne 'B1514EBC099765E39FA37EB780B92A140A94C86BB0B3B3D98226B38825979732') { throw 'Engine checksum mismatch' }
+$engineHash = 'B1514EBC099765E39FA37EB780B92A140A94C86BB0B3B3D98226B38825979732'
+$validEngineCache = (Test-Path -LiteralPath $archive -PathType Leaf) -and
+    (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -eq $engineHash
+if (-not $validEngineCache) {
+    $downloadArchive = Join-Path $engineCache ('whisper-v1.8.2.download-' + [Guid]::NewGuid().ToString('N') + '.zip')
+    try {
+        & curl.exe -L --fail --retry 2 -o $downloadArchive 'https://github.com/ggml-org/whisper.cpp/releases/download/v1.8.2/whisper-bin-x64.zip'
+        if ($LASTEXITCODE -ne 0) { throw 'Engine download failed' }
+        if ((Get-FileHash -LiteralPath $downloadArchive -Algorithm SHA256).Hash -ne $engineHash) { throw 'Engine checksum mismatch' }
+        if (Test-Path -LiteralPath $archive -PathType Leaf) { [IO.File]::Replace($downloadArchive, $archive, [NullString]::Value, $true) }
+        else { [IO.File]::Move($downloadArchive, $archive) }
+    } finally {
+        if (Test-Path -LiteralPath $downloadArchive -PathType Leaf) {
+            try { Remove-Item -LiteralPath $downloadArchive -Force }
+            catch { Write-Warning ('Temporary engine download retained: ' + $downloadArchive) }
+        }
+    }
+}
 Expand-Archive -LiteralPath $archive -DestinationPath $engineCache -Force
 $engineOutput = Join-Path $Destination 'engine'
 New-Item -ItemType Directory -Force -Path $engineOutput | Out-Null
 Copy-Item -LiteralPath (Join-Path $engineCache 'Release\whisper-server.exe') -Destination $engineOutput
 Get-ChildItem -LiteralPath (Join-Path $engineCache 'Release') -Filter '*.dll' | Where-Object Name -ne 'SDL2.dll' | Copy-Item -Destination $engineOutput
 Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'LICENSE-*.txt' | Copy-Item -Destination $Destination
+foreach ($document in @('LICENSE', 'NOTICE.md', 'PRIVACY.md')) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $document) -Destination $Destination
+}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '使用说明.txt') -Destination $Destination
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '播放器组件来源.txt') -Destination $Destination
 # Use the same checksum-pinned player binaries as the tested release.

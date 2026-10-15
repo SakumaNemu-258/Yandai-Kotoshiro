@@ -118,6 +118,7 @@ internal static class Program
                     await Task.Delay(250); Application.DoEvents();
                     File.WriteAllText(Path.Combine(args[1], "stop-ui-checks.txt"), await form.VerifyStopForPreviewAsync());
                     File.WriteAllText(Path.Combine(args[1], "modeless-settings-checks.txt"), form.VerifyModelessSettingsForPreview(args[1]));
+                    File.WriteAllText(Path.Combine(args[1], "history-export-ui-checks.txt"), await form.VerifyHistoryExportForPreviewAsync(args[1]));
                     File.WriteAllText(Path.Combine(args[1], "main-layout-checks.txt"), form.VerifyMainLayoutForPreview(args[1]));
                     File.WriteAllText(Path.Combine(args[1], "desktop-shell-checks.txt"), DesktopShell.VerifyForPreview(form, Path.Combine(args[1], "main-native-frame.png")));
                     File.WriteAllText(Path.Combine(args[1], "icon-window-checks.txt"), AppIconTests.VerifyForPreview(form));
@@ -131,6 +132,7 @@ internal static class Program
                     dialog.VerifyModelsForPreview(); await Task.Delay(100); Application.DoEvents();
                     dialog.VerifyRecognitionForPreview();
                     dialog.VerifySpeechModelsForPreview();
+                    File.WriteAllText(Path.Combine(args[1], "speech-model-fetch-ui-checks.txt"), await dialog.VerifySpeechModelFetchForPreviewAsync());
                     File.WriteAllText(Path.Combine(args[1], "context-glossary-ui-checks.txt"), dialog.VerifyContextForPreview() + Environment.NewLine + dialog.VerifyGlossaryForPreview());
                     File.WriteAllText(Path.Combine(args[1], "recognition-model-ui-checks.txt"), "PASS: editable custom speech model IDs, provider-specific presets and preservation across provider/mode switches.");
                     using var image = DesktopShell.CapturePreview(dialog); image.Save(Path.Combine(args[1], "settings.png"));

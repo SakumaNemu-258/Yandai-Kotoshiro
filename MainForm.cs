@@ -16,6 +16,7 @@ public sealed class MainForm : Form
     private readonly Button biliButton = new SidebarButton("延时翻译", ShellIcon.Video);
     private readonly Button subtitleToggle = Theme.Button("显示字幕");
     private readonly Button translateNav = new SidebarButton("实时翻译", ShellIcon.Live), historyNav = new SidebarButton("翻译记录", ShellIcon.History);
+    private readonly Button historyExport = Theme.Button("导出 TXT");
     private readonly Label workspaceTitle = Theme.Label("实时翻译");
     private readonly Panel workspace = new(), readingHost = new(), readingBody = new(), composerHost = new(), operationHost = new(), delayedHost = new();
     private readonly TableLayoutPanel mainLayout = new();
@@ -37,6 +38,9 @@ public sealed class MainForm : Form
     private LiveAudioCapture? capture;
     private IRecognitionEngine? engine;
     private bool busy, closing;
+    private bool exportingHistory;
+    private Task? historyExportTask;
+    private string? previewHistoryExportPath;
     private long levelUpdate;
     private bool hotkeyRegistered;
     internal string SelectedDeviceName => (devices.SelectedItem as AudioDevice)?.Name ?? "";
@@ -70,11 +74,15 @@ public sealed class MainForm : Form
         workspace.Dock = DockStyle.Fill; workspace.Margin = Padding.Empty; workspace.BackColor = Theme.Surface;
         mainLayout.Dock = DockStyle.Fill; mainLayout.Padding = Padding.Empty; mainLayout.Margin = Padding.Empty; mainLayout.ColumnCount = 1; mainLayout.RowCount = 3; mainLayout.BackColor = Theme.Surface;
         mainLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 79)); mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 245));
-        var header = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(30, 17, 30, 10), Margin = Padding.Empty, ColumnCount = 1, RowCount = 2, BackColor = Theme.Surface };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); header.RowStyles.Add(new RowStyle(SizeType.Absolute, 26)); header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(30, 17, 30, 10), Margin = Padding.Empty, ColumnCount = 2, RowCount = 2, BackColor = Theme.Surface };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); header.RowStyles.Add(new RowStyle(SizeType.Absolute, 26)); header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         workspaceTitle.Font = new Font("Microsoft YaHei UI", 12, FontStyle.Bold); workspaceTitle.Margin = Padding.Empty;
         service.Font = new Font("Microsoft YaHei UI", 8.5f); service.Margin = Padding.Empty; service.AutoSize = false; service.Dock = DockStyle.Fill; service.AutoEllipsis = true;
         header.Controls.Add(workspaceTitle, 0, 0); header.Controls.Add(service, 0, 1);
+        historyExport.Anchor = AnchorStyles.Right; historyExport.Margin = new Padding(16, 0, 0, 0); historyExport.Font = new Font("Microsoft YaHei UI", 9); historyExport.Visible = false; historyExport.Enabled = false;
+        header.Controls.Add(historyExport, 1, 0); header.SetRowSpan(historyExport, 2);
+        historyExport.Click += (_, _) => historyExportTask = ExportHistoryAsync();
+        details.SetToolTip(historyExport, "导出当前已保留记录（包含日语原文和中文译文），保存为 UTF-8 TXT。");
         header.Paint += (_, e) => { using var pen = new Pen(Theme.Border); e.Graphics.DrawLine(pen, 0, header.Height - 1, header.Width, header.Height - 1); };
         mainLayout.Controls.Add(header, 0, 0);
 
@@ -83,7 +91,7 @@ public sealed class MainForm : Form
         history.Margin = Padding.Empty; history.Font = new Font("Microsoft YaHei UI", 11); history.HideSelection = false; history.ScrollBars = RichTextBoxScrollBars.Vertical; history.WordWrap = true;
         readingBody.Controls.Add(history); history.Visible = false;
         var recordMenu = new ContextMenuStrip(); recordMenu.Items.Add("复制选中内容", null, (_, _) => { if (history.SelectionLength > 0) history.Copy(); }); recordMenu.Items.Add("复制全部记录", null, (_, _) => { if (history.TextLength > 0) Clipboard.SetText(history.Text); }); recordMenu.Items.Add("查看最新记录", null, (_, _) => { history.SelectionStart = history.TextLength; history.SelectionLength = 0; history.ScrollToCaret(); }); history.ContextMenuStrip = recordMenu;
-        history.TextChanged += (_, _) => history.Visible = history.TextLength > 0 && currentPage == MainPage.Records;
+        history.TextChanged += (_, _) => { history.Visible = history.TextLength > 0 && currentPage == MainPage.Records; SyncHistoryExport(); };
         mainLayout.Controls.Add(readingHost, 0, 1);
 
         operationHost.Dock = DockStyle.Fill; operationHost.BackColor = Theme.Surface; operationHost.Margin = Padding.Empty;
@@ -181,6 +189,7 @@ public sealed class MainForm : Form
         operationHost.Visible = page != MainPage.Records; mainLayout.RowStyles[2].Height = page == MainPage.Records ? 0 : 245;
         composerHost.Visible = page == MainPage.Realtime; delayedHost.Visible = page == MainPage.Delayed;
         history.Visible = history.TextLength > 0 && page == MainPage.Records;
+        SyncHistoryExport();
         mainLayout.PerformLayout();
         fitWorkspace?.Invoke();
         if (page == MainPage.Records && history.Visible) history.Focus();
@@ -191,6 +200,40 @@ public sealed class MainForm : Form
     {
         bool allowed = biliButton.Enabled && setup.Enabled && settingsEditor is not { IsDisposed: false } && !closing;
         delayedRoom.Enabled = delayedStart.Enabled = allowed;
+    }
+    private void SyncHistoryExport()
+    {
+        historyExport.Visible = currentPage == MainPage.Records;
+        historyExport.Enabled = !exportingHistory && history.TextLength > 0;
+    }
+    private async Task ExportHistoryAsync()
+    {
+        if (exportingHistory || history.TextLength == 0 || closing) return;
+        // Capture on the UI thread before the picker opens; translation may continue while it is open.
+        string snapshot = history.Text;
+        exportingHistory = true; SyncHistoryExport();
+        try
+        {
+            string path;
+            if (previewHistoryExportPath is { } previewPath) path = previewPath;
+            else
+            {
+                using var picker = new SaveFileDialog { Title = "导出翻译记录（UTF-8 TXT）", Filter = "文本文件 (*.txt)|*.txt", DefaultExt = "txt", AddExtension = true, FileName = $"Kotoshiro-翻译记录-{DateTime.Now:yyyyMMdd-HHmmss}.txt", OverwritePrompt = true };
+                if (picker.ShowDialog(this) != DialogResult.OK) return;
+                path = picker.FileName;
+            }
+            await HistoryFiles.WriteTextAsync(path, snapshot);
+            if (!IsDisposed && !closing) status.Text = "已导出当前已保留记录（包含日语原文和中文译文）。";
+        }
+        catch (Exception)
+        {
+            if (!IsDisposed && !closing) MessageBox.Show(this, "无法保存翻译记录，请检查保存位置、文件权限或文件是否正被占用，然后重试。", "翻译记录导出失败", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        finally
+        {
+            exportingHistory = false;
+            if (!IsDisposed) SyncHistoryExport();
+        }
     }
     private AppSettings PrepareDelayedPlayerSettings()
     {
@@ -274,7 +317,7 @@ public sealed class MainForm : Form
                     var visibleControls = new List<Control> { translateNav, biliButton, historyNav, setup, workspaceTitle, service };
                     if (page == MainPage.Realtime) visibleControls.AddRange([devices, refresh, start, subtitleToggle, through, status, timing]);
                     else if (page == MainPage.Delayed) visibleControls.AddRange([delayedRoom, delayedStart, delayedStatus]);
-                    else visibleControls.Add(history);
+                    else visibleControls.AddRange([history, historyExport]);
                     foreach (Control control in visibleControls)
                     {
                         var bounds = RectangleToClient(control.RectangleToScreen(control.ClientRectangle));
@@ -297,6 +340,37 @@ public sealed class MainForm : Form
             biliButton.Enabled = setup.Enabled = true; SyncDelayedControls(); if (originalOverlay) { if (!overlay.Visible) overlay.Show(); } else overlay.Hide(); PerformLayout(); Application.DoEvents();
         }
         return string.Join(Environment.NewLine, checks);
+    }
+    internal async Task<string> VerifyHistoryExportForPreviewAsync(string folder)
+    {
+        if (exportingHistory || closing || !Visible) throw new InvalidOperationException("翻译记录导出检查需要已显示且未在导出的窗口。");
+        string originalRtf = history.Rtf ?? "", originalStatus = status.Text; MainPage originalPage = currentPage;
+        int selected = history.SelectionStart, selectedLength = history.SelectionLength;
+        bool originalStartEnabled = start.Enabled, originalSetupEnabled = setup.Enabled, originalShowJapanese = settings.ShowJapanese;
+        try
+        {
+            Directory.CreateDirectory(folder); SelectWorkspace(MainPage.Records); history.Clear(); Application.DoEvents();
+            if (!historyExport.Visible || historyExport.Enabled) throw new InvalidOperationException("空翻译记录应显示但禁用导出按钮。");
+            settings.ShowJapanese = false;
+            AppendTranslationRecord("日語の原文です。𠮷", "这是中文译文。🎉");
+            if (!historyExport.Enabled) throw new InvalidOperationException("出现翻译记录后导出按钮未启用。");
+            string snapshot = history.Text;
+            string exportPath = Path.Combine(folder, "history-export-ui.txt"); previewHistoryExportPath = exportPath;
+            historyExport.PerformClick();
+            AppendTranslationRecord("あとから届いた字幕", "导出开始后到来的字幕");
+            if (historyExportTask == null) throw new InvalidOperationException("导出按钮未执行保存。");
+            await historyExportTask;
+            string expected = snapshot.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\r\n");
+            if (await File.ReadAllTextAsync(exportPath) != expected || !expected.Contains("日語の原文です。𠮷") || !history.Text.Contains("导出开始后到来的字幕") || !historyExport.Enabled || start.Enabled != originalStartEnabled || setup.Enabled != originalSetupEnabled)
+                throw new InvalidOperationException("翻译记录导出未使用完整文本快照、影响了后续记录或改变了翻译控制状态。");
+            SelectWorkspace(MainPage.Realtime); if (historyExport.Visible) throw new InvalidOperationException("实时页不应显示记录导出按钮。");
+            SelectWorkspace(MainPage.Delayed); if (historyExport.Visible) throw new InvalidOperationException("延时页不应显示记录导出按钮。");
+            return "PASS: records header has an export TXT button, disabled when empty and hidden on other pages; clicking saves the retained Japanese/Chinese text snapshot even with original subtitles hidden, while later captions continue accumulating and translation controls stay unchanged.";
+        }
+        finally
+        {
+            previewHistoryExportPath = null; historyExportTask = null; settings.ShowJapanese = originalShowJapanese; history.Rtf = originalRtf; history.Select(Math.Min(selected, history.TextLength), Math.Min(selectedLength, Math.Max(0, history.TextLength - selected))); SelectWorkspace(originalPage); status.Text = originalStatus;
+        }
     }
     public void OpenSettings()
     {

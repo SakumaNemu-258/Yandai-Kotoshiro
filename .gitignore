@@ -6,8 +6,10 @@ engine-cache/
 运行版/
 运行版.zip
 Kotoshiro-*-Windows-x64.zip
+Kotoshiro-*-Windows-x64-Setup.exe
 .kotoshiro-build-*/
 .kotoshiro-backup-*/
+.kotoshiro-installer-*/
 engine/
 player/
 .vs/

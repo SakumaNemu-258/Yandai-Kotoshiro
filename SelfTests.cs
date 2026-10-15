@@ -25,10 +25,12 @@ internal static class SelfTests
             results.AddRange(AppIconTests.VerifyPublishedExecutable(executable));
         results.AddRange(await TranslationContextTests.RunAsync(Path.Combine(folder, "translation-context")));
         results.AddRange(await GlossaryFilesTests.RunAsync(Path.Combine(folder, "glossary-files")));
+        results.AddRange(await HistoryFilesTests.RunAsync(Path.Combine(folder, "history-files")));
         results.AddRange(await BrandingTests.RunAsync(Path.Combine(folder, "rebranding")));
         results.AddRange(await BilibiliTests.UnitAsync());
         results.AddRange(PlaybackGateTests.Run());
         results.AddRange(await ApiModelsTests.RunAsync());
+        results.AddRange(await SpeechApiModelsTests.RunAsync());
         results.AddRange(await ApiRecognitionTests.RunAsync());
         results.AddRange(await BilibiliAccountTests.RunAsync(Path.Combine(folder, "bilibili-account")));
         results.AddRange(await BilibiliDanmakuTests.UnitAsync());

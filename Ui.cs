@@ -20,7 +20,13 @@ public sealed class SettingsForm : Form
     private readonly ComboBox recognitionMode, speechProvider, speechModel, themeChoice;
     private readonly TextBox speechAddress, speechKey;
     private readonly Label speechStatus, speechHint;
-    private readonly Button speechTest;
+    private readonly Button speechTest, fetchSpeechModels;
+    private readonly Label speechModelStatus;
+    private CancellationTokenSource? speechModelFetch;
+    private long speechModelGeneration;
+    private bool busy, closing;
+    private HttpMessageHandler? previewSpeechModelsHandler;
+    private Task? speechModelFetchTask;
     private readonly CheckBox gpu, showJapanese;
     private readonly NumericUpDown threads, seconds, fontSize, opacity, translationContext;
     private readonly Button importGlossary, exportGlossary;
@@ -96,27 +102,39 @@ public sealed class SettingsForm : Form
         var recognitionPage = Page("语音识别", "本地识别适合离线使用；API 识别适合性能较弱的电脑。", pages);
         recognitionMode = Theme.Combo(); recognitionMode.Items.AddRange(new object[] { "本地识别", "API 识别" }); recognitionMode.SelectedIndex = Result.RecognitionMode == "api" ? 1 : 0; Row(recognitionPage, 1, "识别方式", recognitionMode);
         var storage = FieldTable(2); recognitionPage.Controls.Add(storage, 0, 2); recognitionPage.SetColumnSpan(storage, 2);
-        var speechFields = FieldTable(8);
+        var speechFields = FieldTable(9);
         recognitionPage.Controls.Add(speechFields, 0, 3); recognitionPage.SetColumnSpan(speechFields, 2);
         speechProvider = Theme.Combo(); speechProvider.Items.AddRange(new object[] { "OpenAI", "自定义兼容 API" }); speechProvider.SelectedIndex = Result.SpeechApiProvider == "custom" ? 1 : 0; Row(speechFields, 0, "识别平台", speechProvider);
         speechAddress = Theme.Input(Result.SpeechApiBase); Row(speechFields, 1, "识别 API 地址", speechAddress);
-        speechModel = Theme.Combo(editable: true); speechModel.Text = Result.SpeechApiModel; Row(speechFields, 2, "识别模型", speechModel);
-        speechKey = Theme.Input(Result.GetSpeechKey()); speechKey.UseSystemPasswordChar = true; Row(speechFields, 3, "识别 API 密钥", speechKey);
-        var revealSpeech = new CheckBox { Text = "显示识别密钥", AutoSize = true }; revealSpeech.CheckedChanged += (_, _) => speechKey.UseSystemPasswordChar = !revealSpeech.Checked; speechFields.Controls.Add(revealSpeech, 1, 4);
-        speechHint = Theme.Label("", true); speechFields.Controls.Add(speechHint, 1, 5);
-        speechTest = Theme.Button("用录音测试 API 识别"); speechTest.Click += async (_, _) => await TestSpeechAsync(); speechFields.Controls.Add(speechTest, 1, 6);
-        speechStatus = Theme.Label("选择日语录音测试，会使用识别 API 的少量用量。", true); speechFields.Controls.Add(speechStatus, 1, 7);
+        speechModel = Theme.Combo(editable: true); speechModel.Text = Result.SpeechApiModel;
+        speechModel.AutoCompleteMode = AutoCompleteMode.SuggestAppend; speechModel.AutoCompleteSource = AutoCompleteSource.ListItems;
+        fetchSpeechModels = Theme.Button("获取模型"); fetchSpeechModels.Margin = Padding.Empty;
+        fetchSpeechModels.Click += async (_, _) => { speechModelFetchTask = FetchSpeechModelsAsync(); await speechModelFetchTask; };
+        var speechModelRow = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
+        speechModelRow.ColumnStyles.Add(new(SizeType.Percent, 100)); speechModelRow.ColumnStyles.Add(new(SizeType.Absolute, 116));
+        speechModel.Margin = new Padding(0, 5, 12, 0); speechModelRow.Controls.Add(speechModel, 0, 0); speechModelRow.Controls.Add(fetchSpeechModels, 1, 0);
+        Row(speechFields, 2, "识别模型", speechModelRow);
+        speechModelStatus = Theme.Label(SpeechModelInstructions, true); speechFields.Controls.Add(speechModelStatus, 1, 3);
+        speechKey = Theme.Input(Result.GetSpeechKey()); speechKey.UseSystemPasswordChar = true; Row(speechFields, 4, "识别 API 密钥", speechKey);
+        var revealSpeech = new CheckBox { Text = "显示识别密钥", AutoSize = true }; revealSpeech.CheckedChanged += (_, _) => speechKey.UseSystemPasswordChar = !revealSpeech.Checked; speechFields.Controls.Add(revealSpeech, 1, 5);
+        speechHint = Theme.Label("", true); speechFields.Controls.Add(speechHint, 1, 6);
+        speechTest = Theme.Button("用录音测试 API 识别"); speechTest.Click += async (_, _) => await TestSpeechAsync(); speechFields.Controls.Add(speechTest, 1, 7);
+        speechStatus = Theme.Label("选择日语录音测试，会使用识别 API 的少量用量。", true); speechFields.Controls.Add(speechStatus, 1, 8);
+        speechAddress.TextChanged += (_, _) => InvalidateSpeechModelRequest();
+        speechKey.TextChanged += (_, _) => InvalidateSpeechModelRequest();
         speechProvider.SelectedIndexChanged += (_, _) =>
         {
+            InvalidateSpeechModelRequest();
             UpdateSpeechModels();
             if (speechProvider.SelectedIndex == 0 && !SpeechAddressIsOpenAi()) { speechAddress.Text = "https://api.openai.com/v1"; speechKey.Text = ""; speechStatus.Text = "请填写 OpenAI 识别密钥；翻译密钥不会自动用于识别。"; }
+            else if (speechProvider.SelectedIndex == 1) speechStatus.Text = "选择日语录音测试，会使用识别 API 的少量用量。";
         };
         UpdateSpeechModels();
         var local = FieldTable(14);
         recognitionPage.Controls.Add(local, 0, 4); recognitionPage.SetColumnSpan(local, 2);
         var recognitionHint = Theme.Label("API 识别无需下载本地模型或启用显卡。系统声音模式可不选文件夹；B 站延迟播放需文件夹存放临时视频缓存。", true); recognitionPage.Controls.Add(recognitionHint, 0, 5); recognitionPage.SetColumnSpan(recognitionHint, 2);
-        void SelectRecognitionMode() { bool remote = recognitionMode.SelectedIndex == 1; speechFields.Visible = remote; local.Visible = !remote; recognitionHint.Visible = remote; }
-        recognitionMode.SelectedIndexChanged += (_, _) => SelectRecognitionMode(); SelectRecognitionMode();
+        void SelectRecognitionMode() { bool remote = recognitionMode.SelectedIndex == 1; speechFields.Visible = remote; local.Visible = !remote; recognitionHint.Visible = remote; RefreshSpeechModelFetchButton(); }
+        recognitionMode.SelectedIndexChanged += (_, _) => { InvalidateSpeechModelRequest(); SelectRecognitionMode(); }; SelectRecognitionMode();
         modelFolder = Theme.Input(Result.ModelFolder); modelFolder.ReadOnly = true; modelFolder.PlaceholderText = "本地模型 / 视频缓存，例如 D:\\Kotoshiro模型"; Row(storage, 0, "文件存放位置", modelFolder);
         var storageActions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
         browseFolder = Theme.Button("选择文件夹"); browseFolder.Click += (_, _) => ChooseFolder(); storageActions.Controls.Add(browseFolder);
@@ -203,7 +221,8 @@ public sealed class SettingsForm : Form
         save = Theme.Button("保存设置", true); save.Click += (_, _) => Save();
         var cancel = Theme.Button("取消"); cancel.Click += (_, _) => Close(); footer.Controls.Add(save); footer.Controls.Add(cancel);
         pages.SetFooter(footer); Controls.Add(pages);
-        FormClosing += (_, _) => { operation?.Cancel(); modelGeneration++; modelFetch?.Cancel(); chatgpt.Cancel(); SettingsStore.SetModelDirectory(Result.ModelFolder); Theme.Use(DialogResult == DialogResult.OK ? Result.UiTheme : original.UiTheme); Theme.RefreshOpenForms(); };
+        FormClosing += (_, _) => { closing = true; InvalidateSpeechModelRequest(false); operation?.Cancel(); modelGeneration++; modelFetch?.Cancel(); chatgpt.Cancel(); SettingsStore.SetModelDirectory(Result.ModelFolder); Theme.Use(DialogResult == DialogResult.OK ? Result.UiTheme : original.UiTheme); Theme.RefreshOpenForms(); };
+        Disposed += (_, _) => { closing = true; speechModelGeneration++; speechModelFetch?.Cancel(); };
         Shown += (_, _) => Theme.Refresh(this);
         DesktopShell.Attach(this, "设置");
     }
@@ -275,6 +294,78 @@ public sealed class SettingsForm : Form
             request.Dispose();
         }
     }
+    private const string SpeechModelInstructions = "只获取已确认支持日语的语音识别模型；未知型号仍可手动填写。";
+    private void RefreshSpeechModelFetchButton()
+    {
+        if (!IsDisposed && !closing)
+            fetchSpeechModels.Enabled = !busy && recognitionMode.SelectedIndex == 1 && (speechModelFetch == null || speechModelFetch.IsCancellationRequested);
+    }
+    private void InvalidateSpeechModelRequest(bool resetStatus = true)
+    {
+        speechModelGeneration++; speechModelFetch?.Cancel();
+        if (!IsDisposed && !closing)
+        {
+            if (resetStatus) speechModelStatus.Text = SpeechModelInstructions;
+            RefreshSpeechModelFetchButton();
+        }
+    }
+    private void PopulateSpeechModels(IReadOnlyList<ApiModelInfo> choices, string selected)
+    {
+        speechModel.BeginUpdate();
+        try
+        {
+            speechModel.Items.Clear();
+            foreach (var model in choices) if (!speechModel.Items.Contains(model.Id)) speechModel.Items.Add(model.Id);
+            speechModel.Text = selected;
+        }
+        finally { speechModel.EndUpdate(); }
+    }
+    private async Task FetchSpeechModelsAsync()
+    {
+        if (busy || operation != null || recognitionMode.SelectedIndex != 1 || IsDisposed || closing) return;
+        speechModelFetch?.Cancel();
+        var request = new CancellationTokenSource(); speechModelFetch = request;
+        long generation = ++speechModelGeneration;
+        fetchSpeechModels.Enabled = false; speechModelStatus.Text = "正在获取已确认支持日语的语音模型…仅查询列表，不上传音频。";
+        try
+        {
+            var snapshot = new AppSettings { RecognitionMode = "api", SpeechApiProvider = speechProvider.SelectedIndex == 1 ? "custom" : "openai", SpeechApiBase = speechAddress.Text.Trim(), SpeechApiModel = speechModel.Text.Trim() };
+            snapshot.SetSpeechKey(speechKey.Text);
+            var choices = await SpeechApiModels.FetchAsync(snapshot, request.Token, previewSpeechModelsHandler);
+            if (IsDisposed || closing || busy || request.IsCancellationRequested || generation != speechModelGeneration || recognitionMode.SelectedIndex != 1) return;
+            if (choices.Count == 0) throw new InvalidDataException();
+            string selected = speechModel.Text;
+            bool preserved = !string.IsNullOrWhiteSpace(selected) && !choices.Any(model => model.Id == selected);
+            PopulateSpeechModels(choices, selected);
+            speechModelStatus.Text = $"已获取 {choices.Count} 个已确认支持日语的识别模型。" + (preserved ? " 当前手填型号已保留，其日语能力需自行确认。" : "请选择模型，也可手动填写其他型号。");
+        }
+        catch (OperationCanceledException)
+        {
+            if (!IsDisposed && !closing && generation == speechModelGeneration)
+                speechModelStatus.Text = "获取超时，请稍后重试；原模型和列表已保留，可继续手动填写。";
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed && !closing && generation == speechModelGeneration)
+                speechModelStatus.Text = SpeechModelFetchError(ex) + " 原模型和列表已保留，可继续手动填写。";
+        }
+        finally
+        {
+            if (ReferenceEquals(speechModelFetch, request)) { speechModelFetch = null; RefreshSpeechModelFetchButton(); }
+            request.Dispose();
+        }
+    }
+    private static string SpeechModelFetchError(Exception exception) => exception switch
+    {
+        HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized } => "识别 API 密钥无效，请检查密钥。",
+        HttpRequestException { StatusCode: System.Net.HttpStatusCode.Forbidden } => "识别 API 拒绝访问列表，请检查账号权限。",
+        HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.MethodNotAllowed } => "此识别 API 不提供模型列表。",
+        HttpRequestException { StatusCode: System.Net.HttpStatusCode.TooManyRequests } => "获取过于频繁，请稍后重试。",
+        TimeoutException => "获取超时，请稍后重试。",
+        InvalidDataException => "列表中没有可确认的日语语音识别模型，或列表格式不受支持。",
+        ArgumentException or InvalidOperationException => "请检查识别 API 地址和密钥后重试。",
+        _ => "获取失败，请检查网络和识别 API 设置。"
+    };
     private AppSettings ReadFields()
     {
         if (activeProvider == "chatgpt") chatgpt.ValidateSelection();
@@ -346,11 +437,8 @@ public sealed class SettingsForm : Form
     private void UpdateSpeechModels()
     {
         string current = speechModel.Text;
-        speechModel.BeginUpdate(); speechModel.Items.Clear();
-        if (speechProvider.SelectedIndex == 0) speechModel.Items.AddRange(SpeechApiRecognition.Models.Cast<object>().ToArray());
-        else if (!string.IsNullOrWhiteSpace(current) && !SpeechApiRecognition.Models.Contains(current)) speechModel.Items.Add(current);
-        speechModel.Text = current; speechModel.EndUpdate();
-        speechHint.Text = (speechProvider.SelectedIndex == 0 ? "可从列表选择，或直接填写有权限使用的语音模型 ID。" : "请直接输入服务商提供的语音识别模型 ID；需要支持 audio/transcriptions。") + "\n音频上传给识别服务并单独计费。DeepSeek 文字模型请在“翻译服务”中使用。";
+        PopulateSpeechModels(speechProvider.SelectedIndex == 0 ? SpeechApiModels.Defaults() : [], current);
+        speechHint.Text = "获取模型会筛选已确认支持日语且兼容 audio/transcriptions 的型号；列表可能不涵盖全部可用模型。\n音频上传给识别服务并单独计费。DeepSeek 文字模型请在“翻译服务”中使用。";
     }
     internal void VerifySpeechModelsForPreview()
     {
@@ -361,11 +449,145 @@ public sealed class SettingsForm : Form
             speechProvider.SelectedIndex = 1; speechModel.Text = "fixture-japanese-asr"; UpdateSpeechModels();
             if (speechModel.DropDownStyle != ComboBoxStyle.DropDown || SpeechApiRecognition.Models.Any(x => speechModel.Items.Contains(x)) || speechModel.Text != "fixture-japanese-asr") throw new InvalidOperationException("自定义识别模型仍含有 OpenAI 预设，或不支持直接输入。");
             speechProvider.SelectedIndex = 0;
-            if (SpeechApiRecognition.Models.Any(x => !speechModel.Items.Contains(x)) || speechModel.Text != "fixture-japanese-asr") throw new InvalidOperationException("OpenAI 识别预设或已填写模型未保留。");
+            if (SpeechApiModels.Defaults().Any(x => !speechModel.Items.Contains(x.Id)) || speechModel.Text != "fixture-japanese-asr") throw new InvalidOperationException("OpenAI 识别预设或已填写模型未保留。");
             speechProvider.SelectedIndex = 1;
-            if (speechModel.Items.Count != 1 || speechModel.Text != "fixture-japanese-asr") throw new InvalidOperationException("切换平台后自定义识别模型未保留。");
+            if (speechModel.Items.Count != 0 || speechModel.Text != "fixture-japanese-asr") throw new InvalidOperationException("切换平台后自定义识别模型未保留，或未知型号进入了已确认列表。");
         }
         finally { speechProvider.SelectedIndex = oldProvider; speechModel.Text = oldModel; speechAddress.Text = oldAddress; speechKey.Text = oldKey; speechStatus.Text = oldStatus; UpdateSpeechModels(); }
+    }
+    internal async Task<string> VerifySpeechModelFetchForPreviewAsync()
+    {
+        if (!Visible || busy || speechModelFetch != null) throw new InvalidOperationException("获取语音模型的预览检查需要空闲、已显示的设置窗口。");
+        int oldPage = pages.SelectedPageIndex, oldMode = recognitionMode.SelectedIndex, oldProvider = speechProvider.SelectedIndex;
+        string oldAddress = speechAddress.Text, oldKey = speechKey.Text, oldModel = speechModel.Text, oldStatus = speechModelStatus.Text, oldHint = speechHint.Text;
+        string oldTranslationAddress = address.Text, oldTranslationKey = key.Text, oldTranslationModel = apiModel.Text, oldTranslationStatus = modelStatus.Text;
+        object[] oldItems = speechModel.Items.Cast<object>().ToArray();
+        var oldHandler = previewSpeechModelsHandler;
+        const string speechSecret = "preview-speech-secret", translationSecret = "preview-translation-secret";
+        string[] confirmed = ["Qwen/Qwen3-ASR-1.7B", "FunAudioLLM/SenseVoiceSmall"];
+        static HttpResponseMessage ModelResponse(IEnumerable<string> ids) => new(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { data = ids.Select(id => new { id, @object = "model" }) }), System.Text.Encoding.UTF8, "application/json")
+        };
+        void Prepare()
+        {
+            Busy(false); pages.ShowPage(1); recognitionMode.SelectedIndex = 1; speechProvider.SelectedIndex = 1;
+            speechAddress.Text = "https://api.siliconflow.cn/v1"; speechKey.Text = speechSecret; speechModel.Text = "preview-manual-japanese-model";
+            UpdateSpeechModels(); PerformLayout(); Application.DoEvents();
+        }
+        Task Click()
+        {
+            long previousGeneration = speechModelGeneration; fetchSpeechModels.PerformClick();
+            if (speechModelFetchTask == null || speechModelGeneration == previousGeneration) throw new InvalidOperationException("获取语音模型按钮未触发真实点击事件。");
+            return speechModelFetchTask;
+        }
+        void CheckConfirmedList()
+        {
+            if (speechModel.Items.Count != confirmed.Length || confirmed.Any(id => !speechModel.Items.Contains(id)) || speechModel.Items.Contains("preview-manual-japanese-model"))
+                throw new InvalidOperationException("语音模型列表混入文字、合成或未知模型，或漏掉已确认日语型号。");
+        }
+        try
+        {
+            Prepare(); address.Text = "https://translation.example.test/v1"; key.Text = translationSecret; apiModel.Text = "preview-translation-model";
+            string translationStatus = modelStatus.Text;
+            bool sawSpeechCredentials = false;
+            previewSpeechModelsHandler = new SpeechModelPreviewHandler((request, _) =>
+            {
+                sawSpeechCredentials = request.Method == HttpMethod.Get && request.RequestUri!.Host == "api.siliconflow.cn" && request.RequestUri.AbsolutePath == "/v1/models" && request.RequestUri.Query.Contains("sub_type=speech-to-text") && request.Headers.Authorization?.Parameter == speechSecret;
+                return Task.FromResult(ModelResponse(confirmed.Concat(["deepseek-chat", "FunAudioLLM/CosyVoice2-0.5B", "preview-manual-japanese-model"])));
+            });
+            await Click(); CheckConfirmedList();
+            if (!sawSpeechCredentials || speechModel.Text != "preview-manual-japanese-model" || !speechModelStatus.Text.Contains("已获取 2 个") || !speechModelStatus.Text.Contains("自行确认") || !fetchSpeechModels.Enabled)
+                throw new InvalidOperationException("模型获取未使用独立识别凭据、未保留手填值，或已确认模型统计错误。");
+            if (address.Text != "https://translation.example.test/v1" || key.Text != translationSecret || apiModel.Text != "preview-translation-model" || modelStatus.Text != translationStatus)
+                throw new InvalidOperationException("获取识别模型改动了翻译服务设置或提示。");
+
+            previewSpeechModelsHandler = new SpeechModelPreviewHandler((_, _) => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized) { Content = new StringContent("private-service-body " + speechSecret) }));
+            await Click(); CheckConfirmedList();
+            if (speechModel.Text != "preview-manual-japanese-model" || !speechModelStatus.Text.Contains("密钥无效") || speechModelStatus.Text.Contains(speechSecret) || speechModelStatus.Text.Contains("private-service-body"))
+                throw new InvalidOperationException("获取失败未保留模型，或错误提示暴露了服务正文/密钥。");
+            previewSpeechModelsHandler = new SpeechModelPreviewHandler((_, _) => Task.FromResult(ModelResponse(["deepseek-chat", "preview-unknown-asr"])));
+            await Click(); CheckConfirmedList();
+            if (!speechModelStatus.Text.Contains("没有可确认") || speechModel.Text != "preview-manual-japanese-model") throw new InvalidOperationException("没有已确认型号时未保留原列表或未说明限制。");
+
+            foreach (string change in new[] { "address", "key", "provider", "mode", "busy" })
+            {
+                Prepare();
+                var completion = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                bool canceled = false;
+                previewSpeechModelsHandler = new SpeechModelPreviewHandler(async (_, token) =>
+                {
+                    using var registration = token.Register(() => canceled = true);
+                    return await completion.Task; // Deliberately return a late response after cancellation.
+                });
+                Task pending = Click();
+                if (fetchSpeechModels.Enabled || !speechModelStatus.Text.Contains("正在获取")) throw new InvalidOperationException("获取进行中没有禁用按钮或显示状态。");
+                switch (change)
+                {
+                    case "address": speechAddress.Text = "https://api.siliconflow.cn/changed/v1"; break;
+                    case "key": speechKey.Text = "preview-changed-speech-secret"; break;
+                    case "provider": speechProvider.SelectedIndex = 0; break;
+                    case "mode": recognitionMode.SelectedIndex = 0; break;
+                    case "busy": Busy(true); break;
+                }
+                string expectedModel = speechModel.Text, expectedStatus = speechModelStatus.Text;
+                object[] expectedItems = speechModel.Items.Cast<object>().ToArray();
+                completion.SetResult(ModelResponse(confirmed)); await pending;
+                if (!canceled || speechModel.Text != expectedModel || speechModelStatus.Text != expectedStatus || !expectedItems.SequenceEqual(speechModel.Items.Cast<object>()))
+                    throw new InvalidOperationException("更改 " + change + " 后请求未取消，或迟到响应覆盖了当前设置。");
+                if (change == "busy" && fetchSpeechModels.Enabled) throw new InvalidOperationException("忙碌操作期间获取模型按钮被旧请求重新启用。");
+                Busy(false);
+            }
+
+            Prepare();
+            var manualCompletion = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            previewSpeechModelsHandler = new SpeechModelPreviewHandler((_, _) => manualCompletion.Task);
+            Task manualPending = Click(); speechModel.Text = "preview-new-manual-model";
+            key.Text = "preview-new-translation-secret"; address.Text = "https://translation.example.test/changed/v1";
+            manualCompletion.SetResult(ModelResponse(confirmed)); await manualPending; CheckConfirmedList();
+            if (speechModel.Text != "preview-new-manual-model" || !speechModelStatus.Text.Contains("已获取 2 个")) throw new InvalidOperationException("获取期间的新手填型号未保留，或翻译侧编辑取消了识别请求。");
+
+            Prepare();
+            var oldCompletion = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            previewSpeechModelsHandler = new SpeechModelPreviewHandler((_, _) => oldCompletion.Task);
+            Task oldPending = Click(); speechKey.Text = "preview-new-speech-secret";
+            previewSpeechModelsHandler = new SpeechModelPreviewHandler((_, _) => Task.FromResult(ModelResponse([confirmed[0]])));
+            await Click();
+            string newerStatus = speechModelStatus.Text;
+            oldCompletion.SetResult(ModelResponse(confirmed)); await oldPending;
+            if (speechModel.Items.Count != 1 || !speechModel.Items.Contains(confirmed[0]) || speechModelStatus.Text != newerStatus || !fetchSpeechModels.Enabled)
+                throw new InvalidOperationException("旧请求覆盖了新请求的模型列表、状态或按钮状态。");
+
+            using (var closingForm = new SettingsForm(Result.Clone()))
+            {
+                closingForm.Show(this); closingForm.pages.ShowPage(1); closingForm.recognitionMode.SelectedIndex = 1; closingForm.speechProvider.SelectedIndex = 1;
+                closingForm.speechAddress.Text = "https://api.siliconflow.cn/v1"; closingForm.speechKey.Text = speechSecret;
+                closingForm.PerformLayout(); Application.DoEvents();
+                var closedCompletion = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                bool canceled = false;
+                closingForm.previewSpeechModelsHandler = new SpeechModelPreviewHandler(async (_, token) =>
+                {
+                    using var registration = token.Register(() => canceled = true);
+                    return await closedCompletion.Task;
+                });
+                closingForm.fetchSpeechModels.PerformClick(); Task closedPending = closingForm.speechModelFetchTask ?? throw new InvalidOperationException("关闭窗口预览检查未触发模型按钮。");
+                closingForm.Close(); closedCompletion.SetResult(ModelResponse(confirmed)); await closedPending;
+                if (!canceled || !closingForm.closing || !closingForm.IsDisposed) throw new InvalidOperationException("设置窗口关闭时获取语音模型请求未取消。");
+            }
+            return "PASS: real speech-model button clicks use independent speech address/key; only confirmed Japanese ASR IDs enter the list, unknown manual text is preserved outside the list and excluded from the count; HTTP/no-confirmed-model failures preserve selection/list and hide response bodies; address/key/provider/mode/Busy/close cancel requests, late/older responses cannot overwrite newer results, and translation edits stay isolated. All HTTP requests were simulated; no audio or real key was sent.";
+        }
+        finally
+        {
+            InvalidateSpeechModelRequest(false); previewSpeechModelsHandler = oldHandler; Busy(false);
+            recognitionMode.SelectedIndex = oldMode; speechProvider.SelectedIndex = oldProvider; speechAddress.Text = oldAddress; speechKey.Text = oldKey;
+            speechModel.Items.Clear(); speechModel.Items.AddRange(oldItems); speechModel.Text = oldModel; speechModelStatus.Text = oldStatus; speechHint.Text = oldHint;
+            address.Text = oldTranslationAddress; key.Text = oldTranslationKey; apiModel.Text = oldTranslationModel; modelStatus.Text = oldTranslationStatus;
+            pages.ShowPage(oldPage); PerformLayout(); Application.DoEvents();
+        }
+    }
+    private sealed class SpeechModelPreviewHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> callback) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) => callback(request, token);
     }
     internal void ShowSubtitleStyleForPreview(bool? japanese = null)
     {
@@ -480,6 +702,14 @@ public sealed class SettingsForm : Form
                         var panel = (Panel)pages.PageAt(page);
                         if (panel.Width < 460 || panel.Height < 440 || panel.HorizontalScroll.Visible)
                             throw new InvalidOperationException($"设置布局检查：{size.Width}×{size.Height} 页 {page + 1} 内容过窄或发生横向溢出。");
+                        if (page == 1 && mode == 1)
+                        {
+                            panel.AutoScrollPosition = Point.Empty; PerformLayout(); Application.DoEvents();
+                            var modelBounds = new Rectangle(panel.PointToClient(speechModel.PointToScreen(Point.Empty)), speechModel.Size);
+                            var fetchBounds = new Rectangle(panel.PointToClient(fetchSpeechModels.PointToScreen(Point.Empty)), fetchSpeechModels.Size);
+                            if (!speechModel.Visible || !fetchSpeechModels.Visible || !panel.ClientRectangle.Contains(modelBounds) || !panel.ClientRectangle.Contains(fetchBounds) || modelBounds.IntersectsWith(fetchBounds) || speechModel.Width < 180)
+                                throw new InvalidOperationException("设置布局检查：日语识别模型与获取按钮在默认/最小窗口中被遮挡、过窄或重叠。");
+                        }
                         foreach (var button in save.Parent!.Controls.OfType<Button>())
                         {
                             var point = PointToClient(button.PointToScreen(Point.Empty));
@@ -502,7 +732,7 @@ public sealed class SettingsForm : Form
                     }
                 }
             }
-            return "PASS: settings pages remain readable at default/minimum sizes; long pages scroll vertically, glossary actions are reachable by scrolling, and Save/Cancel stay accessible.";
+            return "PASS: settings pages remain readable at default/minimum sizes; Japanese speech-model input and Fetch button are visible without overlap; long pages scroll vertically, glossary actions are reachable by scrolling, and Save/Cancel stay accessible.";
         }
         finally
         {
@@ -539,7 +769,7 @@ public sealed class SettingsForm : Form
         try { var updated = ReadFields(); if (updated.RecognitionMode == "api") RecognitionEngines.Validate(updated); Result = updated; SettingsStore.Save(Result); DialogResult = DialogResult.OK; Close(); }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "设置未保存", MessageBoxButtons.OK, MessageBoxIcon.Information); }
     }
-    private void Busy(bool enabled) { if (enabled) { modelGeneration++; modelFetch?.Cancel(); } save.Enabled = test.Enabled = download.Enabled = recognition.Enabled = recognitionMode.Enabled = speechProvider.Enabled = speechAddress.Enabled = speechModel.Enabled = speechKey.Enabled = speechTest.Enabled = themeChoice.Enabled = enableGpu.Enabled = gpu.Enabled = browseFolder.Enabled = migrateModels.Enabled = provider.Enabled = protocol.Enabled = address.Enabled = apiModel.Enabled = key.Enabled = translationContext.Enabled = importGlossary.Enabled = exportGlossary.Enabled = !enabled; fetchModels.Enabled = !enabled && modelFetch == null; chatgpt.Enabled = !enabled || chatgpt.IsBusy; }
+    private void Busy(bool enabled) { busy = enabled; if (enabled) { modelGeneration++; modelFetch?.Cancel(); InvalidateSpeechModelRequest(); } save.Enabled = test.Enabled = download.Enabled = recognition.Enabled = recognitionMode.Enabled = speechProvider.Enabled = speechAddress.Enabled = speechModel.Enabled = speechKey.Enabled = speechTest.Enabled = themeChoice.Enabled = enableGpu.Enabled = gpu.Enabled = browseFolder.Enabled = migrateModels.Enabled = provider.Enabled = protocol.Enabled = address.Enabled = apiModel.Enabled = key.Enabled = translationContext.Enabled = importGlossary.Enabled = exportGlossary.Enabled = !enabled; fetchModels.Enabled = !enabled && modelFetch == null; RefreshSpeechModelFetchButton(); chatgpt.Enabled = !enabled || chatgpt.IsBusy; }
     private bool ChooseFolder()
     {
         using var chooser = new FolderBrowserDialog { Description = "选择模型与显卡组件的存放文件夹（建议 D 盘或其他数据盘）", UseDescriptionForTitle = true, SelectedPath = modelFolder.Text };

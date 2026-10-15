@@ -36,6 +36,13 @@ public static class ApiModels
         if (snapshot.ApiProvider == "chatgpt") throw new InvalidOperationException("ChatGPT 订阅的模型请在账号区域中选择。");
         Uri endpoint = Endpoint(snapshot.ApiBase, snapshot.ApiProtocol);
         string key = snapshot.GetKey().Trim();
+        return await FetchFromEndpointAsync(endpoint, key, snapshot.ApiProtocol == "messages", token, handler);
+    }
+
+    // Shared bounded metadata reader. Speech discovery supplies its independently validated endpoint/key.
+    internal static async Task<IReadOnlyList<ApiModelInfo>> FetchFromEndpointAsync(Uri endpoint, string key, bool messages, CancellationToken token, HttpMessageHandler? handler = null)
+    {
+        token.ThrowIfCancellationRequested();
         if (key.Length == 0) throw new InvalidOperationException("请先填写 API 密钥，再获取模型列表。");
         if (key.Contains('\r') || key.Contains('\n')) throw new ArgumentException("API 密钥包含换行，请重新填写。");
 
@@ -48,7 +55,6 @@ public static class ApiModels
             var models = new Dictionary<string, ApiModelInfo>(StringComparer.Ordinal);
             var cursors = new HashSet<string>(StringComparer.Ordinal);
             string? cursor = null;
-            bool messages = snapshot.ApiProtocol == "messages";
             for (int page = 0; page < MaximumPages; page++)
             {
                 Uri pageEndpoint = messages ? new Uri(endpoint.AbsoluteUri + "?limit=100" + (cursor == null ? "" : "&after_id=" + Uri.EscapeDataString(cursor))) : endpoint;
