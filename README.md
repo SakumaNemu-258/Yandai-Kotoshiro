@@ -98,6 +98,8 @@ dotnet .\bin\Release\net8.0-windows\win-x64\Kotoshiro.dll --preview .\preview-ou
 
 NAudio、QRCoder、.NET、whisper.cpp、mpv、FFmpeg 等组件的许可证随仓库提供，具体来源与版本见 [播放器组件来源](播放器组件来源.txt)。`player-upstream` 保留对应播放器构建和源码归档；这些归档沿用其各自许可证。
 
+当前播放器归档、完整提交、上游构建日志和静态依赖来源的核查见 [第三方源码核查](docs/third-party-source-audit.md)。现有资料尚不足以确认全部静态依赖的完整对应源码齐备；核查文档明确列出缺口及补齐方式，不表示已经完成第三方许可审核或取得签名资格。
+
 标题栏与应用图标资源位于 `Assets`。当前应用图标采用白底黑线版本，标题栏透明线条仍随黑白主题切换。
 
 `AppIcon.ico` 由白色版 SVG 导出，包含 16～256 像素的七个尺寸，16 像素使用专门的小图形。需要重新导出图标时，可在安装了 `sharp` 的 Node.js 环境执行 `node Assets/export-app-icon.cjs`；正常构建直接使用已保存的 ICO。
