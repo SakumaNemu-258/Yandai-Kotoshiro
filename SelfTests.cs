@@ -21,6 +21,7 @@ internal static class SelfTests
         Directory.CreateDirectory(folder); SettingsStore.Root = Path.Combine(folder, "settings");
         var results = new List<string>();
         results.AddRange(AppIconTests.Run());
+        results.AddRange(RichTextHistoryTests.Run());
         if (Environment.ProcessPath is { } executable && executable.EndsWith("Kotoshiro.exe", StringComparison.OrdinalIgnoreCase))
             results.AddRange(AppIconTests.VerifyPublishedExecutable(executable));
         results.AddRange(await TranslationContextTests.RunAsync(Path.Combine(folder, "translation-context")));

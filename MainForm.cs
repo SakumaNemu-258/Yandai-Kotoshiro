@@ -246,7 +246,7 @@ public sealed class MainForm : Form
     {
         if (IsDisposed || closing || string.IsNullOrWhiteSpace(japanese) || string.IsNullOrWhiteSpace(chinese)) return;
         history.AppendText($"{DateTime.Now:HH:mm:ss}  {japanese}\n{chinese}\n\n");
-        if (history.TextLength > 30000) { history.Select(0, history.TextLength - 24000); history.SelectedText = ""; }
+        if (history.TextLength > 30000) RichTextHistory.RemovePrefix(history, history.TextLength - 24000);
         history.SelectionStart = history.TextLength; history.ScrollToCaret();
     }
     private void BindDelayedHistory(BilibiliPlayerForm player)

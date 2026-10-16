@@ -129,7 +129,7 @@ internal sealed class BilibiliCommentsPanel : UserControl
             messages.SelectionColor = Theme.Text; messages.AppendText(comment.Text + "\n\n");
             if (messages.TextLength > 50000)
             {
-                int cut = messages.Text.IndexOf('\n', 10000); if (cut > 0) { messages.Select(0, cut + 1); messages.SelectedText = ""; saved = Math.Max(0, saved - cut - 1); }
+                int cut = messages.Text.IndexOf('\n', 10000); if (cut > 0) { RichTextHistory.RemovePrefix(messages, cut + 1); saved = Math.Max(0, saved - cut - 1); }
             }
             if (follow.Checked) { messages.SelectionStart = messages.TextLength; messages.ScrollToCaret(); }
             else messages.Select(Math.Min(saved, messages.TextLength), Math.Min(length, Math.Max(0, messages.TextLength - saved)));
